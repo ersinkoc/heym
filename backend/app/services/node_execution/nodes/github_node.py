@@ -46,10 +46,12 @@ def execute(ctx: NodeExecutionContext) -> object:
     if not operation:
         raise ValueError("GitHub node requires an operation")
 
-    owner = self.evaluate_message_template(
+    # Every field renders blank as "": evaluate_message_template would render a blank field
+    # as the whole input context, and post it as an issue body or use it as a path or branch.
+    owner = self.evaluate_nonempty_message_template(
         str(node_data.get("githubOwner", "") or ""), inputs, node_id
     ).strip()
-    repo = self.evaluate_message_template(
+    repo = self.evaluate_nonempty_message_template(
         str(node_data.get("githubRepo", "") or ""), inputs, node_id
     ).strip()
     owner_optional_operations = {"getUserIssues", "inviteUser"}
@@ -73,7 +75,7 @@ def execute(ctx: NodeExecutionContext) -> object:
             return True, ""
         if isinstance(raw_value, str) and raw_value == "":
             return True, ""
-        resolved = self.evaluate_message_template(str(raw_value), inputs, node_id)
+        resolved = self.evaluate_nonempty_message_template(str(raw_value), inputs, node_id)
         return True, resolved
 
     def _parse_optional_string_list(
@@ -224,7 +226,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "count": len(referrers),
             }
         elif operation == "getIssue":
-            issue_number_value = self.evaluate_message_template(
+            issue_number_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
             ).strip()
             if not issue_number_value:
@@ -242,12 +244,12 @@ def execute(ctx: NodeExecutionContext) -> object:
             }
         elif operation in {"listIssues", "getRepositoryIssues"}:
             state = (
-                self.evaluate_message_template(
+                self.evaluate_nonempty_message_template(
                     str(node_data.get("githubState", "open") or "open"), inputs, node_id
                 ).strip()
                 or "open"
             )
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             per_page = int(float(per_page_value or "30"))
@@ -296,12 +298,12 @@ def execute(ctx: NodeExecutionContext) -> object:
                 **_page_info(),
             }
         elif operation == "createComment":
-            issue_number_value = self.evaluate_message_template(
+            issue_number_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
             ).strip()
             if not issue_number_value:
                 raise ValueError("GitHub createComment requires an issue number")
-            comment_body = self.evaluate_message_template(
+            comment_body = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubCommentBody", "") or ""), inputs, node_id
             )
             if not comment_body.strip():
@@ -316,12 +318,12 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "url": comment.get("html_url"),
             }
         elif operation == "createIssue":
-            title = self.evaluate_message_template(
+            title = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubTitle", "") or ""), inputs, node_id
             ).strip()
             if not title:
                 raise ValueError("GitHub createIssue requires a title")
-            body = self.evaluate_message_template(
+            body = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBody", "") or ""), inputs, node_id
             )
             issue = service.create_issue(
@@ -341,7 +343,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "url": issue.get("html_url"),
             }
         elif operation == "updateIssue":
-            issue_number_value = self.evaluate_message_template(
+            issue_number_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
             ).strip()
             if not issue_number_value:
@@ -377,12 +379,12 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "url": issue.get("html_url"),
             }
         elif operation == "lockIssue":
-            issue_number_value = self.evaluate_message_template(
+            issue_number_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
             ).strip()
             if not issue_number_value:
                 raise ValueError("GitHub lockIssue requires an issue number")
-            lock_reason = self.evaluate_message_template(
+            lock_reason = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubLockReason", "") or ""), inputs, node_id
             ).strip()
             allowed_lock_reasons = {"off-topic", "too heated", "resolved", "spam"}
@@ -405,12 +407,12 @@ def execute(ctx: NodeExecutionContext) -> object:
             }
         elif operation in {"listPullRequests", "getRepositoryPullRequests"}:
             state = (
-                self.evaluate_message_template(
+                self.evaluate_nonempty_message_template(
                     str(node_data.get("githubState", "open") or "open"), inputs, node_id
                 ).strip()
                 or "open"
             )
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             per_page = int(float(per_page_value or "30"))
@@ -437,20 +439,20 @@ def execute(ctx: NodeExecutionContext) -> object:
                 **_page_info(),
             }
         elif operation == "createPullRequest":
-            title = self.evaluate_message_template(
+            title = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubTitle", "") or ""), inputs, node_id
             ).strip()
-            head = self.evaluate_message_template(
+            head = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubHead", "") or ""), inputs, node_id
             ).strip()
-            base = self.evaluate_message_template(
+            base = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBase", "") or ""), inputs, node_id
             ).strip()
             if not title or not head or not base:
                 raise ValueError(
                     "GitHub createPullRequest requires title, head branch, and base branch"
                 )
-            body = self.evaluate_message_template(
+            body = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBody", "") or ""), inputs, node_id
             )
             draft = _coerce_boolean(node_data.get("githubDraft"), default=False)
@@ -528,7 +530,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                     "url": review.get("html_url"),
                 }
             elif operation == "listReviews":
-                per_page_value = self.evaluate_message_template(
+                per_page_value = self.evaluate_nonempty_message_template(
                     str(node_data.get("githubPerPage", "30") or "30"),
                     inputs,
                     node_id,
@@ -589,7 +591,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                     "url": review.get("html_url"),
                 }
         elif operation == "listReleases":
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             per_page = int(float(per_page_value or "30"))
@@ -604,7 +606,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                 **_page_info(),
             }
         elif operation == "getRelease":
-            release_id_value = self.evaluate_message_template(
+            release_id_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubReleaseId", "") or ""), inputs, node_id
             ).strip()
             if not release_id_value:
@@ -620,18 +622,18 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "url": release.get("html_url"),
             }
         elif operation == "createRelease":
-            tag_name = self.evaluate_message_template(
+            tag_name = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubTagName", "") or ""), inputs, node_id
             ).strip()
             if not tag_name:
                 raise ValueError("GitHub createRelease requires a tag name")
-            name = self.evaluate_message_template(
+            name = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubTitle", "") or ""), inputs, node_id
             ).strip()
-            body = self.evaluate_message_template(
+            body = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBody", "") or ""), inputs, node_id
             )
-            target_commitish = self.evaluate_message_template(
+            target_commitish = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBranch", "") or ""), inputs, node_id
             ).strip()
             release = service.create_release(
@@ -653,13 +655,13 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "url": release.get("html_url"),
             }
         elif operation == "updateRelease":
-            release_id_value = self.evaluate_message_template(
+            release_id_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubReleaseId", "") or ""), inputs, node_id
             ).strip()
             if not release_id_value:
                 raise ValueError("GitHub updateRelease requires a release id")
             release_id = int(float(release_id_value))
-            tag_name = self.evaluate_message_template(
+            tag_name = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubTagName", "") or ""), inputs, node_id
             ).strip()
             name_provided, name_raw = _resolve_optional_template("githubTitle")
@@ -697,7 +699,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "url": release.get("html_url"),
             }
         elif operation == "deleteRelease":
-            release_id_value = self.evaluate_message_template(
+            release_id_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubReleaseId", "") or ""), inputs, node_id
             ).strip()
             if not release_id_value:
@@ -706,7 +708,7 @@ def execute(ctx: NodeExecutionContext) -> object:
             delete_result = service.delete_release(owner, repo, release_id)
             output = {"success": True, "operation": operation, **delete_result}
         elif operation == "listWorkflows":
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             per_page = int(float(per_page_value or "30"))
@@ -721,7 +723,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                 **_page_info(),
             }
         elif operation == "getWorkflow":
-            workflow_id = self.evaluate_message_template(
+            workflow_id = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubWorkflowId", "") or ""), inputs, node_id
             ).strip()
             if not workflow_id:
@@ -820,12 +822,12 @@ def execute(ctx: NodeExecutionContext) -> object:
             )
             output = {"success": True, "operation": operation, **wait_result}
         elif operation == "getFile":
-            path = self.evaluate_message_template(
+            path = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubFilePath", "") or ""), inputs, node_id
             ).strip()
             if not path:
                 raise ValueError("GitHub getFile requires a file path")
-            ref = self.evaluate_message_template(
+            ref = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBranch", "") or ""), inputs, node_id
             ).strip()
             file_data = service.get_file(owner, repo, path, ref=ref or None)
@@ -838,29 +840,29 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "content": file_data.get("content"),
             }
         elif operation == "listFiles":
-            path = self.evaluate_message_template(
+            path = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubFilePath", "") or ""), inputs, node_id
             ).strip()
-            ref = self.evaluate_message_template(
+            ref = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBranch", "") or ""), inputs, node_id
             ).strip()
             directory = service.list_files(owner, repo, path=path, ref=ref or None)
             output = {"success": True, "operation": operation, **directory}
         elif operation == "upsertFile":
-            path = self.evaluate_message_template(
+            path = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubFilePath", "") or ""), inputs, node_id
             ).strip()
             if not path:
                 raise ValueError("GitHub upsertFile requires a file path")
-            message = self.evaluate_message_template(
+            message = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubCommitMessage", "") or ""), inputs, node_id
             ).strip()
             if not message:
                 raise ValueError("GitHub upsertFile requires a commit message")
-            content = self.evaluate_message_template(
+            content = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubFileContent", "") or ""), inputs, node_id
             )
-            branch = self.evaluate_message_template(
+            branch = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBranch", "") or ""), inputs, node_id
             ).strip()
             file_result = service.upsert_file(
@@ -881,17 +883,17 @@ def execute(ctx: NodeExecutionContext) -> object:
                 "created": file_result.get("created"),
             }
         elif operation == "deleteFile":
-            path = self.evaluate_message_template(
+            path = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubFilePath", "") or ""), inputs, node_id
             ).strip()
             if not path:
                 raise ValueError("GitHub deleteFile requires a file path")
-            message = self.evaluate_message_template(
+            message = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubCommitMessage", "") or ""), inputs, node_id
             ).strip()
             if not message:
                 raise ValueError("GitHub deleteFile requires a commit message")
-            branch = self.evaluate_message_template(
+            branch = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubBranch", "") or ""), inputs, node_id
             ).strip()
             delete_result = service.delete_file(
@@ -903,7 +905,7 @@ def execute(ctx: NodeExecutionContext) -> object:
             )
             output = {"success": True, "operation": operation, **delete_result}
         elif operation == "listOrganizationRepositories":
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             per_page = int(float(per_page_value or "30"))
@@ -918,7 +920,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                 **_page_info(),
             }
         elif operation == "listUserRepositories":
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             per_page = int(float(per_page_value or "30"))
@@ -933,7 +935,7 @@ def execute(ctx: NodeExecutionContext) -> object:
                 **_page_info(),
             }
         elif operation == "getUserRepositories":
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             per_page = int(float(per_page_value or "30"))
@@ -949,7 +951,7 @@ def execute(ctx: NodeExecutionContext) -> object:
             }
         elif operation == "getUserIssues":
             state = str(node_data.get("githubState", "open") or "open").strip() or "open"
-            per_page_value = self.evaluate_message_template(
+            per_page_value = self.evaluate_nonempty_message_template(
                 str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
             ).strip()
             issues = _list_pages(
