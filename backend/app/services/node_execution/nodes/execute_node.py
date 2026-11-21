@@ -87,6 +87,12 @@ def execute(ctx: NodeExecutionContext) -> object:
     execute_do_not_wait = bool(node_data.get("executeDoNotWait", False))
 
     if execute_input_mappings and len(execute_input_mappings) > 0:
+        target_fields = (self.workflow_cache.get(execute_workflow_id) or {}).get("input_fields")
+        target_defaults = {
+            field.get("key"): field.get("defaultValue")
+            for field in target_fields or []
+            if isinstance(field, dict) and field.get("defaultValue")
+        }
         execute_inputs = {}
         for mapping in execute_input_mappings:
             key = mapping.get("key", "")
@@ -100,7 +106,8 @@ def execute(ctx: NodeExecutionContext) -> object:
                     resolved_value = self.evaluate_message_template(value_template, inputs, node_id)
                 execute_inputs[key] = resolved_value
             else:
-                execute_inputs[key] = ""
+                # A blank row is unset: the editor shows the field's default next to it.
+                execute_inputs[key] = target_defaults.get(key, "")
     elif execute_input_template:
         if isinstance(execute_input_template, str) and execute_input_template.startswith("$"):
             transformed_input = resolve_leading_dollar_value(
