@@ -1972,10 +1972,15 @@ export const dashboardApi = {
     return response.data;
   },
 
-  toggleMarkdownTask: async (id: string, lineIndex: number): Promise<WidgetDataResponse> => {
+  /** `record` is the detail page's ?record= value: the change is saved for that record only. */
+  toggleMarkdownTask: async (
+    id: string,
+    lineIndex: number,
+    record: string | null = null,
+  ): Promise<WidgetDataResponse> => {
     const response = await api.patch<WidgetDataResponse>(
       `/dashboards/widgets/${id}/markdown-task-toggle`,
-      { line_index: lineIndex },
+      record === null ? { line_index: lineIndex } : { line_index: lineIndex, record },
     );
     return response.data;
   },
@@ -1984,10 +1989,11 @@ export const dashboardApi = {
     id: string,
     lineIndex: number,
     text: string,
+    record: string | null = null,
   ): Promise<WidgetDataResponse> => {
     const response = await api.patch<WidgetDataResponse>(
       `/dashboards/widgets/${id}/markdown-task-update`,
-      { line_index: lineIndex, text },
+      record === null ? { line_index: lineIndex, text } : { line_index: lineIndex, text, record },
     );
     return response.data;
   },

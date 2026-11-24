@@ -7,6 +7,7 @@ dashboard owner, and always runs as that owner, whoever is looking.
 import copy
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict
 from typing import Annotated, Any
 
@@ -68,6 +69,12 @@ from app.models.dashboard_schemas import (
 )
 from app.services import file_intake_service
 from app.services.audit_log import audit
+from app.services.chart_record_data import (
+    keep_record_data,
+    record_text,
+    with_record_text,
+    without_record_data,
+)
 from app.services.count_card_widget import count_card_nodes, countable_value
 from app.services.dashboard_access import (
     PERMISSION_OWNER,
@@ -743,6 +750,52 @@ async def _apply_markdown_text_to_widget(
     return await compute_widget_data(db, widget, run_as_user_id, force=True)
 
 
+def _checked_page_record(record: str | None, dashboard: Dashboard) -> str | None:
+    """The detail page's record a markdown task request names, checked like a data load."""
+    if record is not None and not is_valid_record(record, dashboard.record_format):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="This page does not accept that record",
+        )
+    return record
+
+
+async def _save_record_markdown(
+    db: AsyncSession,
+    widget: DashboardWidget,
+    workflow: Workflow,
+    run_as_user_id: uuid.UUID,
+    record: str,
+    edit: Callable[[str], str],
+) -> WidgetDataResponse:
+    """Apply ``edit`` to the checklist a detail page shows and save it for ``record`` only.
+
+    The text and valueField the widget shows elsewhere stay as they are. The workflow row is
+    locked from reading the saved entry to writing it, so two quick clicks served by
+    different instances apply one after the other. A record with no entry starts from the
+    text its page shows, so ticks already saved in the widget's text carry over.
+    """
+    current = await compute_widget_data(db, widget, run_as_user_id, force=False, record=record)
+    payload = current.payload or {}
+    await db.refresh(workflow, with_for_update=True)
+    displayed_text = _validate_text_task_widget(workflow, payload)
+    nodes = list(workflow.nodes or [])
+    chart_node = _find_chart_output_node(workflow)
+    index = next(i for i, node in enumerate(nodes) if node is chart_node)
+    node_data = dict(nodes[index].get("data") or {})
+    saved_text = record_text(node_data, record)
+    try:
+        updated_text = edit(displayed_text if saved_text is None else saved_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    nodes[index] = {**nodes[index], "data": with_record_text(node_data, record, updated_text)}
+    workflow.nodes = nodes
+    flag_modified(workflow, "nodes")
+    await db.commit()
+    await db.refresh(widget)
+    return await compute_widget_data(db, widget, run_as_user_id, force=True, record=record)
+
+
 async def _file_run_workflow(
     db: AsyncSession, workflow_id: uuid.UUID | None, dashboard: Dashboard, user: User
 ) -> Workflow:
@@ -1286,7 +1339,17 @@ async def toggle_markdown_task(
     db: AsyncSession = Depends(get_db),
 ) -> WidgetDataResponse:
     widget, dashboard, _ = await _load_widget_for_user(db, widget_id, current_user, write=True)
+    record = _checked_page_record(body.record, dashboard)
     workflow = await _load_widget_workflow(db, widget)
+    if record is not None:
+        return await _save_record_markdown(
+            db,
+            widget,
+            workflow,
+            dashboard.owner_id,
+            record,
+            lambda text: toggle_task_item(text, body.line_index),
+        )
 
     current = await compute_widget_data(db, widget, dashboard.owner_id, force=False)
     payload = current.payload or {}
@@ -1310,7 +1373,17 @@ async def update_markdown_task(
     db: AsyncSession = Depends(get_db),
 ) -> WidgetDataResponse:
     widget, dashboard, _ = await _load_widget_for_user(db, widget_id, current_user, write=True)
+    record = _checked_page_record(body.record, dashboard)
     workflow = await _load_widget_workflow(db, widget)
+    if record is not None:
+        return await _save_record_markdown(
+            db,
+            widget,
+            workflow,
+            dashboard.owner_id,
+            record,
+            lambda text: update_or_remove_task_item(text, body.line_index, body.text),
+        )
 
     current = await compute_widget_data(db, widget, dashboard.owner_id, force=False)
     payload = current.payload or {}
@@ -1561,7 +1634,7 @@ def widget_workflow_snapshot(workflow: Workflow) -> dict[str, Any]:
     return {
         "name": workflow.name,
         "description": workflow.description,
-        "nodes": workflow.nodes,
+        "nodes": without_record_data(workflow.nodes),
         "edges": workflow.edges,
     }
 
@@ -1612,6 +1685,8 @@ async def apply_refined_widget(
     edges = dsl.get("edges", [])
     chart_node = await checked_widget_chart(db, user, workflow.nodes or [], nodes)
 
+    # The checklists saved per record are not the model's to change.
+    nodes = keep_record_data(workflow.nodes, nodes)
     previous_version: int | None = None
     if snapshot:
         # Snapshot the pre-edit workflow so the AI fine-tune shows up in Edit History.
@@ -1717,7 +1792,8 @@ async def revert_widget(
             status_code=status.HTTP_409_CONFLICT,
             detail="This widget changed after that edit, so it can no longer be reverted",
         )
-    nodes = copy.deepcopy(version.nodes or [])
+    # A revert restores the graph; the checklists saved per record stay as they are now.
+    nodes = keep_record_data(workflow.nodes, copy.deepcopy(version.nodes or []))
     edges = copy.deepcopy(version.edges or [])
     blocked_error = dashboard_widget_blocked_nodes_error(nodes)
     if blocked_error is not None:

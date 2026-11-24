@@ -76,6 +76,36 @@ describe("useWidgetData", () => {
     expect(data.markdownTaskSaving.value).toBe(false);
   });
 
+  it("saves checklist changes for the detail page's record", async () => {
+    const checklist = { type: "text", text: "- [ ] Ship", text_interactive: true } as const;
+    api.getWidgetData.mockResolvedValue(response(checklist));
+    api.toggleMarkdownTask.mockResolvedValue(response({ ...checklist, text: "- [x] Ship" }));
+    api.updateMarkdownTask.mockResolvedValue(response({ ...checklist, text: "- [x] Sail" }));
+    const data = useWidgetData(
+      () => "w-1",
+      () => "ACME-1",
+    );
+    await data.loadData();
+
+    await data.toggleMarkdownTask(0);
+    await data.updateMarkdownTask({ lineIndex: 0, text: "Sail" });
+
+    expect(api.toggleMarkdownTask).toHaveBeenCalledWith("w-1", 0, "ACME-1");
+    expect(api.updateMarkdownTask).toHaveBeenCalledWith("w-1", 0, "Sail", "ACME-1");
+  });
+
+  it("sends no record from the dashboard itself", async () => {
+    const checklist = { type: "text", text: "- [ ] Ship", text_interactive: true } as const;
+    api.getWidgetData.mockResolvedValue(response(checklist));
+    api.toggleMarkdownTask.mockResolvedValue(response({ ...checklist, text: "- [x] Ship" }));
+    const data = useWidgetData(() => "w-1");
+    await data.loadData();
+
+    await data.toggleMarkdownTask(0);
+
+    expect(api.toggleMarkdownTask).toHaveBeenCalledWith("w-1", 0, null);
+  });
+
   it("leaves charts that are not interactive checklists alone", async () => {
     api.getWidgetData.mockResolvedValue(response({ type: "text", text: "Hello" }));
     const data = useWidgetData(() => "w-1");

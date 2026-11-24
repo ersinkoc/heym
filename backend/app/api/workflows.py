@@ -95,6 +95,7 @@ from app.services.active_execution_overview import collect_active_executions_for
 from app.services.audit_log import OUTCOME_DENIED, OUTCOME_FAILURE, audit
 from app.services.auth import create_workflow_execution_token, decode_token
 from app.services.cache_rate_limit import rate_limiter, response_cache
+from app.services.chart_record_data import keep_record_data
 from app.services.cluster.attribution import started_by_user_options
 from app.services.cluster.dispatch import dispatch_workflow, resolve_placement
 from app.services.cluster.run_history import throw_error_http_status_code
@@ -2048,7 +2049,9 @@ async def update_workflow(
     old_cache_ttl_seconds = workflow.cache_ttl_seconds
     old_rate_limit_requests = workflow.rate_limit_requests
     old_rate_limit_window_seconds = workflow.rate_limit_window_seconds
-    sanitized_nodes = _sanitize_invalid_unicode(workflow_data.nodes)
+    # The checklists a widget saves per detail-page record are written only by the
+    # dashboards' markdown task endpoints; a canvas save keeps what is stored.
+    sanitized_nodes = keep_record_data(old_nodes, _sanitize_invalid_unicode(workflow_data.nodes))
     sanitized_edges = _sanitize_invalid_unicode(workflow_data.edges)
     sanitized_sse_node_config = _sanitize_invalid_unicode(workflow_data.sse_node_config)
 
@@ -2763,7 +2766,7 @@ async def revert_workflow_to_version(
             detail="Revert confirmation required",
         )
 
-    reverted_nodes = _sanitize_invalid_unicode(version.nodes)
+    reverted_nodes = keep_record_data(workflow.nodes, _sanitize_invalid_unicode(version.nodes))
     reverted_edges = _sanitize_invalid_unicode(version.edges)
     if getattr(workflow, "kind", None) == "dashboard_widget":
         blocked_error = dashboard_widget_blocked_nodes_error(reverted_nodes)

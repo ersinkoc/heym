@@ -405,3 +405,43 @@ test("a task list with Windows line endings shows and toggles every checkbox", a
     await deleteDashboard(page, dashboardId);
   }
 });
+
+test("checkboxes on a detail page save for that record only", async ({ page }) => {
+  const dashboardId = await createDashboard(page, `Record checklist ${Date.now()}`);
+
+  try {
+    const widget = await createWidget(page, dashboardId, "Checklist", "text", [
+      {
+        id: "chart",
+        type: "chartOutput",
+        position: { x: 0, y: 0 },
+        data: { label: "notes", chartType: "text", text: "- [ ] Call back\n- [ ] Send quote" },
+      },
+    ], []);
+    const openPage = async (record: string | null): Promise<void> => {
+      const query = record === null ? "" : `&record=${record}`;
+      await page.goto(`/?tab=dashboard&dashboard=${dashboardId}${query}`);
+      await expect(page.getByRole("checkbox")).toHaveCount(2, { timeout: 20_000 });
+    };
+
+    await openPage("ACME-1");
+    const saved = page.waitForResponse((response) =>
+      response.url().includes(`/api/dashboards/widgets/${widget.id}/markdown-task-toggle`),
+    );
+    await page.getByRole("checkbox").nth(0).click();
+    const response = await saved;
+    expect(response.ok()).toBeTruthy();
+    expect(response.request().postDataJSON()).toEqual({ line_index: 0, record: "ACME-1" });
+    await expect(page.getByRole("checkbox").nth(0)).toHaveAttribute("aria-checked", "true");
+
+    // Another record and the dashboard without one still show the widget's own list.
+    await openPage("GLOBEX-2");
+    await expect(page.getByRole("checkbox").nth(0)).toHaveAttribute("aria-checked", "false");
+    await openPage(null);
+    await expect(page.getByRole("checkbox").nth(0)).toHaveAttribute("aria-checked", "false");
+    await openPage("ACME-1");
+    await expect(page.getByRole("checkbox").nth(0)).toHaveAttribute("aria-checked", "true");
+  } finally {
+    await deleteDashboard(page, dashboardId);
+  }
+});

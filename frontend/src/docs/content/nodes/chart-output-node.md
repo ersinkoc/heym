@@ -120,6 +120,8 @@ On the [Dashboard](../tabs/dashboard-tab.md), checkboxes render as clickable con
 
 **Static text only:** interactivity requires GFM task list syntax (`- [ ]` / `- [x]`). Plain dynamic status messages without task items stay read-only. When markdown comes from `valueField`, the first toggle copies it into the static `text` field so changes persist.
 
+**On a detail page:** on a dashboard opened with `?record=<value>` (see [Detail pages](../tabs/dashboard-tab.md#detail-pages)), checkbox changes are saved for that record only. They are stored on the Chart Output node under `recordData`, keyed by record (`{"ACME-1": {"text": "- [x] Call back"}}`), and a run with that record shows the saved markdown instead of the computed one, whether it comes from `text` or from `valueField`. The widget's own `text` and `valueField` do not change, so the dashboard without a record and every other record keep showing what they showed before. A record's first change starts from what its page shows, including ticks already saved in `text`. Only checkbox changes write `recordData`: saving the workflow on the canvas, an AI fine-tune or a revert from Edit History keeps the stored entries, and they are left out of the workflow the AI assistants read.
+
 ### Numbered lists
 
 Text widgets render markdown with **explicit line numbers preserved**. Prefix each line with the number you want shown (e.g. `9.`, `8.`, `7.`). Heym does not renumber lines for you.

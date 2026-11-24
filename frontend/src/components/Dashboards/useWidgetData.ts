@@ -54,7 +54,7 @@ export function useWidgetData(
         ...previousPayload,
         text: toggleTaskItemLocal(previousText, lineIndex),
       };
-      const response = await dashboardApi.toggleMarkdownTask(widgetId(), lineIndex);
+      const response = await dashboardApi.toggleMarkdownTask(widgetId(), lineIndex, record());
       payload.value = response.payload;
       error.value = response.error ?? null;
     } catch (e) {
@@ -81,6 +81,7 @@ export function useWidgetData(
         widgetId(),
         update.lineIndex,
         update.text,
+        record(),
       );
       payload.value = response.payload;
       error.value = response.error ?? null;

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from importlib import import_module
 
+from app.services.chart_record_data import record_text
 from app.services.node_execution.base import NodeExecutionContext
 from app.services.node_execution.nodes.html_output_mapper_node import render_html_template
 
@@ -24,6 +25,15 @@ def execute(ctx: NodeExecutionContext) -> object:
                 merged.update(value)
         source_data = merged
     else:
+        source_data = {}
+    page_params = getattr(self, "page_params", None)
+    stored_text = record_text(
+        node_data, page_params.get("record") if isinstance(page_params, dict) else None
+    )
+    if node_data.get("chartType") == "text" and stored_text is not None:
+        # The checklist saved for this detail page's record replaces the computed markdown.
+        node_data = {key: value for key, value in node_data.items() if key != "valueField"}
+        node_data["text"] = stored_text
         source_data = {}
     if node_data.get("chartType") == "html":
         node_data = {**node_data, "html": render_html_template(ctx)}

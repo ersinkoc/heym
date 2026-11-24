@@ -6,7 +6,7 @@ from pydantic import AfterValidator, BaseModel, Field, StringConstraints
 
 from app.models.schemas import HighlightPayloadSchema
 from app.services.diagram_payload import Entity, EntityRelation, GanttTask
-from app.services.page_params import RecordFormat
+from app.services.page_params import MAX_RECORD_LENGTH, RecordFormat
 
 SharePermission = Literal["read", "write"]
 
@@ -219,11 +219,15 @@ class WidgetRunResponse(BaseModel):
 
 class MarkdownTaskToggleRequest(BaseModel):
     line_index: int = Field(ge=0)
+    # The detail page's ?record= value: the change is saved for that record only.
+    record: str | None = Field(default=None, max_length=MAX_RECORD_LENGTH)
 
 
 class MarkdownTaskUpdateRequest(BaseModel):
     line_index: int = Field(ge=0)
     text: str = ""
+    # The detail page's ?record= value: the change is saved for that record only.
+    record: str | None = Field(default=None, max_length=MAX_RECORD_LENGTH)
 
 
 class WidgetDataResponse(BaseModel):

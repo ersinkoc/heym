@@ -10,13 +10,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from threading import Event, Thread
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator, Literal
+from typing import TYPE_CHECKING, Annotated, Any, AsyncGenerator, Iterator, Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from openai import OpenAI
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import AfterValidator, BaseModel, Field, ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -116,6 +116,7 @@ from app.services.assistant_yolo import (
     stream_yolo_assistant_turn,
 )
 from app.services.background_tasks import spawn_background_task
+from app.services.chart_record_data import keep_record_data, without_record_data
 from app.services.chat_attachments import MAX_CHAT_ATTACHMENTS, run_attachment
 from app.services.chat_image_input import IMAGE_FIELD_KEYWORDS, image_input
 from app.services.chat_progress import ToolProgress, follow_tool, workflow_draft_message
@@ -261,11 +262,21 @@ Respond in the same language the user uses."""
 CANVAS_ASK_SYSTEM_PROMPT = CANVAS_ASK_SYSTEM_PROMPT + CLARIFY_PROTOCOL_PROMPT
 
 
+def _canvas_graph_for_model(workflow: dict | None) -> dict | None:
+    """The canvas graph a request sends, without the checklists widgets save per record."""
+    if not isinstance(workflow, dict) or "nodes" not in workflow:
+        return workflow
+    return {**workflow, "nodes": without_record_data(workflow["nodes"])}
+
+
+CanvasWorkflow = Annotated[dict | None, AfterValidator(_canvas_graph_for_model)]
+
+
 class AIAssistantRequest(BaseModel):
     credential_id: uuid.UUID
     model: str
     message: str
-    current_workflow: dict | None = None
+    current_workflow: CanvasWorkflow = None
     conversation_history: list[dict] | None = None
     conversation_id: uuid.UUID | None = None
     available_workflows: list[dict] | None = None
@@ -279,7 +290,7 @@ class AIAssistantRequest(BaseModel):
 class AnalyzeWorkflowRequest(BaseModel):
     credential_id: uuid.UUID
     model: str
-    current_workflow: dict | None = None
+    current_workflow: CanvasWorkflow = None
     execution_log: dict | None = None
 
 
@@ -1986,7 +1997,7 @@ def _build_workflow_editor_user_message(
         "id": str(workflow.id),
         "name": workflow.name,
         "description": workflow.description or "",
-        "nodes": workflow.nodes or [],
+        "nodes": without_record_data(workflow.nodes or []),
         "edges": workflow.edges or [],
     }
     parts = [
@@ -2043,7 +2054,7 @@ def _build_saved_workflow_payload(
             "name": workflow.name,
             "description": workflow.description,
             "url": f"/workflows/{workflow.id}",
-            "nodes": nodes,
+            "nodes": without_record_data(nodes),
             "edges": edges,
         },
         "input_fields": [field.model_dump(by_alias=True) for field in input_fields],
@@ -2287,7 +2298,7 @@ async def edit_and_run_generated_workflow_tool(
             "id": str(workflow.id),
             "name": workflow.name,
             "description": workflow.description,
-            "nodes": workflow.nodes or [],
+            "nodes": without_record_data(workflow.nodes or []),
             "edges": workflow.edges or [],
         }
         old_nodes = copy.deepcopy(workflow.nodes or [])
@@ -2360,7 +2371,7 @@ async def edit_and_run_generated_workflow_tool(
         )
         if table_pass.needs:
             return json.dumps(requires_data_table_payload(table_pass.needs))
-        nodes = table_pass.nodes
+        nodes = keep_record_data(old_nodes, table_pass.nodes)
         edges = workflow_config["edges"]
         workflow.name = workflow_config["name"]
         workflow.description = workflow_config["description"]

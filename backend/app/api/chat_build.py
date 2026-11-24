@@ -36,6 +36,7 @@ from app.api.workflows import extract_input_fields_from_workflow, get_workflow_f
 from app.db.models import Credential, User, Workflow
 from app.services import file_intake_service, template_service
 from app.services.audit_log import audit
+from app.services.chart_record_data import keep_record_data, without_record_data
 from app.services.chat_attachments import run_attachment
 from app.services.chat_build_mode import (
     AI_BUILDER_TOOL_NAMES,
@@ -368,7 +369,7 @@ class ChatBuildSession:
                 "id": str(target.id),
                 "name": target.name,
                 "description": target.description,
-                "nodes": target.nodes or [],
+                "nodes": without_record_data(target.nodes or []),
                 "edges": target.edges or [],
             }
             if target is not None
@@ -594,6 +595,7 @@ class ChatBuildSession:
                     return tool_error(blocked)
                 if not any(node.get("type") == "chartOutput" for node in nodes):
                     return tool_error(DASHBOARD_WIDGET_NEEDS_CHART_ERROR)
+            nodes = keep_record_data(existing.nodes, nodes)
             before = WorkflowSnapshot.capture(existing)
             existing.name = config["name"]
             existing.description = config["description"]
@@ -801,6 +803,7 @@ class ChatBuildSession:
                 return tool_error(blocked)
         version_number: int | None = None
         if existing is not None:
+            nodes = keep_record_data(existing.nodes, nodes)
             before = WorkflowSnapshot.capture(existing)
             existing.nodes = nodes
             existing.edges = edges
